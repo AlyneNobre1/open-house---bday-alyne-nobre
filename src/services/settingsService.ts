@@ -4,7 +4,7 @@ import {
   setDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 import { EventSettings } from '../types';
 import { DEFAULT_SETTINGS } from '../data/defaultData';
 
@@ -30,6 +30,11 @@ function saveLocalSettings(settings: EventSettings) {
 }
 
 export function subscribeSettings(callback: (settings: EventSettings) => void) {
+  if (!isFirebaseConfigured) {
+    callback(getLocalSettings());
+    return () => {};
+  }
+
   const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
 
   const unsubscribe = onSnapshot(
@@ -86,6 +91,15 @@ export function subscribeSettings(callback: (settings: EventSettings) => void) {
 }
 
 export async function updateEventSettings(newSettings: Partial<EventSettings>): Promise<void> {
+  saveLocalSettings({
+    ...getLocalSettings(),
+    ...newSettings,
+  });
+
+  if (!isFirebaseConfigured) {
+    return;
+  }
+
   const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
   await setDoc(ref, {
     ...newSettings,

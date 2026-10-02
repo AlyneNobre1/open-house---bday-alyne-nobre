@@ -24,6 +24,33 @@ const isAdminUser = () => {
 };
 
 export function subscribeGifts(callback: (gifts: Gift[]) => void) {
+  if (!isFirebaseConfigured) {
+    try {
+      const rawRes = localStorage.getItem('alyne_reservations_cache_v1');
+      const reservations: GiftReservation[] = rawRes ? JSON.parse(rawRes) : [];
+      const reservedCounts: Record<string, number> = {};
+      for (const res of reservations) {
+        reservedCounts[res.giftId] = (reservedCounts[res.giftId] || 0) + (res.quantity || 1);
+      }
+      const initial: Gift[] = INITIAL_GIFTS.map((g, idx) => {
+        const id = `gift-seed-${idx + 1}`;
+        const reserved = reservedCounts[id] || 0;
+        const available = Math.max(0, g.totalQuantity - reserved);
+        return {
+          ...g,
+          id,
+          reservedQuantity: reserved,
+          availableQuantity: available,
+          status: available <= 0 ? 'sold_out' : 'available',
+        };
+      });
+      callback(initial);
+    } catch {
+      callback(INITIAL_GIFTS.map((g, idx) => ({ ...g, id: `gift-seed-${idx + 1}` })));
+    }
+    return () => {};
+  }
+
   const giftsRef = collection(db, GIFTS_COLLECTION);
   let shouldSeed = true;
 

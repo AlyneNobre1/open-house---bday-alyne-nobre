@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, MapPin, Instagram, Sparkles, ArrowDown } from 'lucide-react';
 import { EventSettings } from '../types';
 
@@ -12,7 +12,7 @@ export const Hero: React.FC<HeroProps> = ({ settings, onScrollTo }) => {
     { days: 0, hours: 0, minutes: 0, seconds: 0 }
   );
 
-  const targetDate = (() => {
+  const targetTimestamp = useMemo(() => {
     if (!settings.eventDate) return null;
     try {
       const [year, month, day] = settings.eventDate.split('-').map(Number);
@@ -22,20 +22,20 @@ export const Hero: React.FC<HeroProps> = ({ settings, onScrollTo }) => {
         day,
         Number(settings.eventTime?.split(':')[0] || '17'),
         Number(settings.eventTime?.split(':')[1] || '00')
-      );
+      ).getTime();
     } catch {
       return null;
     }
-  })();
+  }, [settings.eventDate, settings.eventTime]);
 
   useEffect(() => {
     const calculateTime = () => {
-      if (!targetDate) {
+      if (!targetTimestamp) {
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }
 
-      const diff = Math.max(0, targetDate.getTime() - Date.now());
+      const diff = Math.max(0, targetTimestamp - Date.now());
       setTimeLeft({
         days: Math.floor(diff / (1000 * 60 * 60 * 24)),
         hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
@@ -47,7 +47,7 @@ export const Hero: React.FC<HeroProps> = ({ settings, onScrollTo }) => {
     calculateTime();
     const interval = window.setInterval(calculateTime, 1000);
     return () => window.clearInterval(interval);
-  }, [targetDate]);
+  }, [targetTimestamp]);
 
   const formattedDate = (() => {
     const fallbackDate = settings.eventDate || '2026-11-21';
@@ -60,7 +60,7 @@ export const Hero: React.FC<HeroProps> = ({ settings, onScrollTo }) => {
     }
   })();
 
-  const eventHasPassed = targetDate ? targetDate.getTime() < Date.now() : false;
+  const eventHasPassed = targetTimestamp ? targetTimestamp < Date.now() : false;
   const heroHeading = settings.heroHeading || 'Minha casa nova finalmente saiu do Pinterest!';
   const heroSubheading = settings.heroSubheading || 'Esse ano a comemoração é diferente: aniversário + casa nova + a desculpa perfeita para reunir quem eu amo.';
   const heroQuote = settings.quote || 'Vem comemorar comigo e, se quiser, ajuda a montar minha casa nova 😂';
