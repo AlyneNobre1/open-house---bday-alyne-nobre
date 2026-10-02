@@ -157,6 +157,7 @@ export default function App() {
       {selectedGift && (
         <GiftReserveModal
           gift={selectedGift}
+          settings={settings}
           onClose={() => setSelectedGift(null)}
           onSuccess={() => {
             // Keep open to show confirmation and QR Code / links

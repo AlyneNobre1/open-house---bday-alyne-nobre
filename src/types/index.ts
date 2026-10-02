@@ -18,6 +18,8 @@ export interface Gift {
   purchaseUrl?: string;
   pixKey?: string;
   pixQrCodeUrl?: string;
+  pixCopiaECola?: string;
+  pixBankLink?: string;
   status: GiftStatus;
   createdAt?: any;
   updatedAt?: any;
@@ -68,6 +70,10 @@ export interface EventSettings {
   mainImageUrl: string;
   pixKey: string;
   pixKeyType: string;
+  pixReceiverName?: string;
+  pixBankName?: string;
+  pixBankLink?: string;
+  pixCopiaECola?: string;
   pixQrCodeUrl?: string;
   galleryImages: string[];
 }

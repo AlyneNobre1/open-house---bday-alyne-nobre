@@ -11,6 +11,8 @@ import { DEFAULT_SETTINGS } from '../data/defaultData';
 const SETTINGS_COLLECTION = 'eventSettings';
 const SETTINGS_DOC_ID = 'main';
 
+let localSettingsListeners: Array<(settings: EventSettings) => void> = [];
+
 function getLocalSettings(): EventSettings {
   try {
     const raw = localStorage.getItem('alyne_settings_cache_v1');
@@ -24,6 +26,7 @@ function getLocalSettings(): EventSettings {
 function saveLocalSettings(settings: EventSettings) {
   try {
     localStorage.setItem('alyne_settings_cache_v1', JSON.stringify(settings));
+    localSettingsListeners.forEach((fn) => fn(settings));
   } catch (e) {
     console.warn('LocalStorage save error:', e);
   }
@@ -31,8 +34,11 @@ function saveLocalSettings(settings: EventSettings) {
 
 export function subscribeSettings(callback: (settings: EventSettings) => void) {
   if (!isFirebaseConfigured) {
+    localSettingsListeners.push(callback);
     callback(getLocalSettings());
-    return () => {};
+    return () => {
+      localSettingsListeners = localSettingsListeners.filter((fn) => fn !== callback);
+    };
   }
 
   const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
@@ -72,6 +78,10 @@ export function subscribeSettings(callback: (settings: EventSettings) => void) {
         mainImageUrl: data.mainImageUrl || DEFAULT_SETTINGS.mainImageUrl,
         pixKey: data.pixKey || DEFAULT_SETTINGS.pixKey,
         pixKeyType: data.pixKeyType || DEFAULT_SETTINGS.pixKeyType,
+        pixReceiverName: data.pixReceiverName || DEFAULT_SETTINGS.pixReceiverName,
+        pixBankName: data.pixBankName || DEFAULT_SETTINGS.pixBankName,
+        pixBankLink: data.pixBankLink || DEFAULT_SETTINGS.pixBankLink,
+        pixCopiaECola: data.pixCopiaECola || DEFAULT_SETTINGS.pixCopiaECola,
         pixQrCodeUrl: data.pixQrCodeUrl || DEFAULT_SETTINGS.pixQrCodeUrl,
         galleryImages: Array.isArray(data.galleryImages) && data.galleryImages.length > 0
           ? data.galleryImages

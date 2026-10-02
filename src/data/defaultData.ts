@@ -22,6 +22,10 @@ export const DEFAULT_SETTINGS: EventSettings = {
   mainImageUrl: alynePortrait,
   pixKey: "alyne2.nobre.c@gmail.com",
   pixKeyType: "E-mail",
+  pixReceiverName: "Alyne Nobre",
+  pixBankName: "Nubank",
+  pixBankLink: "",
+  pixCopiaECola: "",
   pixQrCodeUrl: "",
   galleryImages: [
     modernLivingRoom,

@@ -300,6 +300,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => setSettingsSaved(false), 3000);
   };
 
+  const handlePixQrCodeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettingsForm((prev) => ({ ...prev, pixQrCodeUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Filtered Guests
   const filteredGuests = guests.filter((g) => {
     const matchSearch =
@@ -1263,36 +1274,151 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
-              {/* Chave Pix Principal */}
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EADBCE] space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wider text-[#A95339]">
-                  Configuração do Pix Principal
+              {/* Dados Bancários e Pix para Recebimento de Presentes */}
+              <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EADBCE] space-y-4">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[#A95339] flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-[#C86D51]" />
+                    <span>Dados Bancários e Pix Oficial para Presentes</span>
+                  </div>
+                  <p className="text-[11px] text-[#68625B] mt-0.5">
+                    Cadastre o link do seu banco, o código Pix Copia e Cola e a foto do QR Code oficial para os convidados pagarem sem erro.
+                  </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-[11px] font-medium text-[#7D756C] mb-1">
-                      Chave Pix
+                    <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
+                      Chave Pix *
                     </label>
                     <input
                       type="text"
+                      required
                       value={settingsForm.pixKey}
                       onChange={(e) => setSettingsForm({ ...settingsForm, pixKey: e.target.value })}
                       placeholder="alyne2.nobre.c@gmail.com"
-                      className="w-full h-10 px-3 rounded-lg border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
+                      className="w-full h-10 px-3 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-[11px] font-medium text-[#7D756C] mb-1">
+                    <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
                       Tipo de Chave
+                    </label>
+                    <select
+                      value={settingsForm.pixKeyType}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, pixKeyType: e.target.value })}
+                      className="w-full h-10 px-3 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
+                    >
+                      <option value="E-mail">E-mail</option>
+                      <option value="Celular">Celular / Telefone</option>
+                      <option value="CPF">CPF</option>
+                      <option value="Chave Aleatória">Chave Aleatória (EVP)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
+                      Nome da Favorecida (como aparece no banco)
                     </label>
                     <input
                       type="text"
-                      value={settingsForm.pixKeyType}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, pixKeyType: e.target.value })}
-                      placeholder="E-mail / Telefone / CPF"
-                      className="w-full h-10 px-3 rounded-lg border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
+                      value={settingsForm.pixReceiverName || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, pixReceiverName: e.target.value })}
+                      placeholder="Ex: Alyne Nobre Custodio"
+                      className="w-full h-10 px-3 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
+                      Nome do Banco
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsForm.pixBankName || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, pixBankName: e.target.value })}
+                      placeholder="Ex: Nubank, Inter, Itaú, Bradesco..."
+                      className="w-full h-10 px-3 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Link de Pagamento do Banco */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
+                    Link Direto do Banco para Pagamento (Opcional)
+                  </label>
+                  <input
+                    type="url"
+                    value={settingsForm.pixBankLink || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, pixBankLink: e.target.value })}
+                    placeholder="Ex: https://nubank.com.br/cobrar/... ou link do seu app bancário"
+                    className="w-full h-10 px-3 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none"
+                  />
+                  <span className="text-[10px] text-[#A59E95] mt-1 block">
+                    Se preenchido, os convidados verão um botão para abrir diretamente o aplicativo do seu banco!
+                  </span>
+                </div>
+
+                {/* Código Pix Copia e Cola Oficial */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1">
+                    Código Pix Copia e Cola Oficial (Opcional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={settingsForm.pixCopiaECola || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, pixCopiaECola: e.target.value })}
+                    placeholder="Cole aqui o código que começa com 000201... gerado pelo aplicativo do seu banco"
+                    className="w-full p-2.5 rounded-xl border border-[#EADBCE] bg-white text-xs text-[#2D2A26] outline-none font-mono resize-none"
+                  />
+                  <span className="text-[10px] text-[#A59E95] mt-0.5 block">
+                    Garante 100% de compatibilidade na hora do convidado colar no banco dele.
+                  </span>
+                </div>
+
+                {/* Upload do QR Code Oficial do Banco */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7D756C] uppercase tracking-wider mb-1.5">
+                    Foto / Imagem do QR Code Oficial do seu Banco
+                  </label>
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <label className="flex-1 w-full flex items-center justify-center gap-2 h-11 px-4 border-2 border-dashed border-[#EADBCE] rounded-xl cursor-pointer bg-white hover:bg-[#FAF8F5] text-xs font-semibold text-[#2D2A26] transition-colors">
+                      <Upload className="w-4 h-4 text-[#C86D51]" />
+                      <span>{settingsForm.pixQrCodeUrl ? 'Trocar Imagem do QR Code' : 'Enviar Print do QR Code do Banco'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePixQrCodeUpload}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {settingsForm.pixQrCodeUrl && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-11 h-11 rounded-xl overflow-hidden border border-[#EADBCE] bg-white shrink-0">
+                          <img
+                            src={settingsForm.pixQrCodeUrl}
+                            alt="QR Code"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSettingsForm({ ...settingsForm, pixQrCodeUrl: '' })}
+                          className="h-9 px-3 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-[#A59E95] mt-1 block">
+                    Tire um print do QR Code no aplicativo do seu banco e suba aqui. Ele será exibido diretamente aos convidados!
+                  </span>
                 </div>
               </div>
 
