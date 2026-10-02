@@ -19,36 +19,101 @@ import { INITIAL_GIFTS } from '../data/defaultData';
 const GIFTS_COLLECTION = 'gifts';
 const RESERVATIONS_COLLECTION = 'giftReservations';
 
+const LOCAL_CUSTOM_GIFTS_KEY = 'alyne_custom_gifts_v2';
+const LOCAL_GIFT_OVERRIDES_KEY = 'alyne_gift_overrides_v2';
+const LOCAL_DELETED_GIFTS_KEY = 'alyne_deleted_gifts_v2';
+
+let localGiftListeners: Array<(gifts: Gift[]) => void> = [];
+
+function getLocalCustomGifts(): Gift[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CUSTOM_GIFTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getLocalGiftOverrides(): Record<string, Partial<Gift>> {
+  try {
+    const raw = localStorage.getItem(LOCAL_GIFT_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getLocalDeletedGifts(): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_DELETED_GIFTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getLocalMergedGifts(): Gift[] {
+  const custom = getLocalCustomGifts();
+  const overrides = getLocalGiftOverrides();
+  const deleted = new Set(getLocalDeletedGifts());
+
+  let rawRes: GiftReservation[] = [];
+  try {
+    const r = localStorage.getItem('alyne_reservations_cache_v1');
+    if (r) rawRes = JSON.parse(r);
+  } catch {}
+
+  const reservedCounts: Record<string, number> = {};
+  for (const res of rawRes) {
+    reservedCounts[res.giftId] = (reservedCounts[res.giftId] || 0) + (res.quantity || 1);
+  }
+
+  const baseGifts: Gift[] = INITIAL_GIFTS.map((g, idx) => ({
+    ...g,
+    id: `gift-seed-${idx + 1}`,
+  }));
+
+  const all = [...custom, ...baseGifts]
+    .filter((g) => !deleted.has(g.id))
+    .map((g) => {
+      const override = overrides[g.id] || {};
+      const merged = { ...g, ...override };
+      const reserved = reservedCounts[merged.id] || Number(merged.reservedQuantity || 0);
+      const total = Number(merged.totalQuantity || 1);
+      const available = Math.max(0, total - reserved);
+      const status =
+        merged.status === 'unavailable'
+          ? 'unavailable'
+          : available <= 0
+          ? 'sold_out'
+          : 'available';
+      return {
+        ...merged,
+        reservedQuantity: reserved,
+        availableQuantity: available,
+        status: status as Gift['status'],
+      };
+    });
+
+  return all;
+}
+
+function notifyGiftListeners() {
+  const merged = getLocalMergedGifts();
+  localGiftListeners.forEach((fn) => fn(merged));
+}
+
 const isAdminUser = () => {
   return typeof window !== 'undefined' && !!localStorage.getItem('alyne_admin_logged_in');
 };
 
 export function subscribeGifts(callback: (gifts: Gift[]) => void) {
   if (!isFirebaseConfigured) {
-    try {
-      const rawRes = localStorage.getItem('alyne_reservations_cache_v1');
-      const reservations: GiftReservation[] = rawRes ? JSON.parse(rawRes) : [];
-      const reservedCounts: Record<string, number> = {};
-      for (const res of reservations) {
-        reservedCounts[res.giftId] = (reservedCounts[res.giftId] || 0) + (res.quantity || 1);
-      }
-      const initial: Gift[] = INITIAL_GIFTS.map((g, idx) => {
-        const id = `gift-seed-${idx + 1}`;
-        const reserved = reservedCounts[id] || 0;
-        const available = Math.max(0, g.totalQuantity - reserved);
-        return {
-          ...g,
-          id,
-          reservedQuantity: reserved,
-          availableQuantity: available,
-          status: available <= 0 ? 'sold_out' : 'available',
-        };
-      });
-      callback(initial);
-    } catch {
-      callback(INITIAL_GIFTS.map((g, idx) => ({ ...g, id: `gift-seed-${idx + 1}` })));
-    }
-    return () => {};
+    localGiftListeners.push(callback);
+    callback(getLocalMergedGifts());
+    return () => {
+      localGiftListeners = localGiftListeners.filter((fn) => fn !== callback);
+    };
   }
 
   const giftsRef = collection(db, GIFTS_COLLECTION);
@@ -271,6 +336,24 @@ export function subscribeReservations(callback: (reservations: GiftReservation[]
 
 export async function createGift(giftData: Omit<Gift, 'id'>): Promise<string> {
   const total = Number(giftData.totalQuantity || 1);
+
+  if (!isFirebaseConfigured) {
+    const id = `gift-custom-${Date.now()}`;
+    const newGift: Gift = {
+      ...giftData,
+      id,
+      totalQuantity: total,
+      availableQuantity: total,
+      reservedQuantity: 0,
+      status: total > 0 ? 'available' : 'sold_out',
+    };
+    const list = getLocalCustomGifts();
+    list.unshift(newGift);
+    localStorage.setItem(LOCAL_CUSTOM_GIFTS_KEY, JSON.stringify(list));
+    notifyGiftListeners();
+    return id;
+  }
+
   const docRef = await addDoc(collection(db, GIFTS_COLLECTION), {
     ...giftData,
     totalQuantity: total,
@@ -284,6 +367,21 @@ export async function createGift(giftData: Omit<Gift, 'id'>): Promise<string> {
 }
 
 export async function updateGift(giftId: string, giftData: Partial<Gift>): Promise<void> {
+  if (!isFirebaseConfigured) {
+    const list = getLocalCustomGifts();
+    const index = list.findIndex((g) => g.id === giftId);
+    if (index >= 0) {
+      list[index] = { ...list[index], ...giftData };
+      localStorage.setItem(LOCAL_CUSTOM_GIFTS_KEY, JSON.stringify(list));
+    } else {
+      const overrides = getLocalGiftOverrides();
+      overrides[giftId] = { ...(overrides[giftId] || {}), ...giftData };
+      localStorage.setItem(LOCAL_GIFT_OVERRIDES_KEY, JSON.stringify(overrides));
+    }
+    notifyGiftListeners();
+    return;
+  }
+
   const giftRef = doc(db, GIFTS_COLLECTION, giftId);
   const updates: Record<string, unknown> = {
     ...giftData,
@@ -294,6 +392,19 @@ export async function updateGift(giftId: string, giftData: Partial<Gift>): Promi
 }
 
 export async function deleteGift(giftId: string): Promise<void> {
+  if (!isFirebaseConfigured) {
+    const list = getLocalCustomGifts().filter((g) => g.id !== giftId);
+    localStorage.setItem(LOCAL_CUSTOM_GIFTS_KEY, JSON.stringify(list));
+
+    const deleted = getLocalDeletedGifts();
+    if (!deleted.includes(giftId)) {
+      deleted.push(giftId);
+      localStorage.setItem(LOCAL_DELETED_GIFTS_KEY, JSON.stringify(deleted));
+    }
+    notifyGiftListeners();
+    return;
+  }
+
   await deleteDoc(doc(db, GIFTS_COLLECTION, giftId));
 }
 

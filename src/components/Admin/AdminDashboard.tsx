@@ -145,15 +145,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setIsScraperModalOpen(false);
       setScraperUrl('');
 
+      const category = (scraped.category as GiftCategory) || 'cozinha';
+
       // Open new gift modal prefilled
       setEditingGift({
         id: '',
         name: scraped.name,
         description: scraped.description,
-        category: 'outros',
+        category,
         imageUrl: scraped.imageUrl,
-        type: 'external',
-        price: scraped.price,
+        type: 'product',
+        price: scraped.price || 150,
         totalQuantity: 1,
         availableQuantity: 1,
         reservedQuantity: 0,
@@ -161,6 +163,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         status: 'available',
       });
       setIsGiftModalOpen(true);
+    } catch (err: unknown) {
+      console.error('Error importing product:', err);
+      alert('Não foi possível importar automaticamente as informações deste link. Você pode preencher manualmente!');
     } finally {
       setScrapingLoading(false);
     }
@@ -1016,6 +1021,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ===================== MODAL: ADICIONAR / EDITAR PRESENTE ===================== */}
       {isGiftModalOpen && (
         <GiftFormModal
+          key={editingGift?.id || editingGift?.purchaseUrl || 'new-gift-modal'}
           gift={editingGift}
           onClose={() => {
             setIsGiftModalOpen(false);
