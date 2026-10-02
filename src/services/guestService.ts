@@ -8,7 +8,7 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 import { Guest, GuestStatus } from '../types';
 
 const GUESTS_COLLECTION = 'guests';
@@ -19,6 +19,16 @@ function toSafeAttendees(value: unknown): number {
 }
 
 export function subscribeGuests(callback: (guests: Guest[]) => void) {
+  if (!isFirebaseConfigured) {
+    try {
+      const raw = localStorage.getItem('alyne_guests_cache_v1');
+      callback(raw ? JSON.parse(raw) : []);
+    } catch {
+      callback([]);
+    }
+    return () => {};
+  }
+
   const ref = collection(db, GUESTS_COLLECTION);
   const q = query(ref, orderBy('createdAt', 'desc'));
 
@@ -67,6 +77,28 @@ export async function registerRsvp(params: {
   }
   if (!whatsapp.trim()) {
     throw new Error('Por favor, informe seu WhatsApp para combinarmos.');
+  }
+
+  if (!isFirebaseConfigured) {
+    try {
+      const raw = localStorage.getItem('alyne_guests_cache_v1');
+      const list: Guest[] = raw ? JSON.parse(raw) : [];
+      const newGuest: Guest = {
+        id: `local-guest-${Date.now()}`,
+        name: name.trim(),
+        whatsapp: whatsapp.trim(),
+        attendees: status === 'confirmed' ? Math.max(1, attendees) : 0,
+        companions: status === 'confirmed' ? companions.filter((c) => c.trim().length > 0) : [],
+        status,
+        notes: notes.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      list.unshift(newGuest);
+      localStorage.setItem('alyne_guests_cache_v1', JSON.stringify(list));
+      return newGuest.id;
+    } catch {
+      return `local-guest-${Date.now()}`;
+    }
   }
 
   const request = addDoc(collection(db, GUESTS_COLLECTION), {

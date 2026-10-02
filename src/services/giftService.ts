@@ -12,7 +12,7 @@ import {
   writeBatch,
   getDocs,
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 import { Gift, GiftReservation } from '../types';
 import { INITIAL_GIFTS } from '../data/defaultData';
 
@@ -116,6 +116,28 @@ export async function reserveGiftWithTransaction(params: {
     throw new Error('Por favor, informe seu nome para a Alyne saber quem é!');
   }
 
+  if (!isFirebaseConfigured) {
+    try {
+      const rawRes = localStorage.getItem('alyne_reservations_cache_v1');
+      const reservations: GiftReservation[] = rawRes ? JSON.parse(rawRes) : [];
+      const newReservation: GiftReservation = {
+        id: `local-res-${Date.now()}`,
+        giftId,
+        giftName: '',
+        guestName: guestName.trim(),
+        guestWhatsapp: guestWhatsapp.trim(),
+        quantity,
+        message: message?.trim() || '',
+        createdAt: new Date().toISOString(),
+      };
+      reservations.unshift(newReservation);
+      localStorage.setItem('alyne_reservations_cache_v1', JSON.stringify(reservations));
+    } catch (e) {
+      console.warn('LocalStorage reservation save error:', e);
+    }
+    return { success: true };
+  }
+
   const giftRef = doc(db, GIFTS_COLLECTION, giftId);
 
   try {
@@ -182,6 +204,16 @@ export async function reserveGiftWithTransaction(params: {
 }
 
 export function subscribeReservations(callback: (reservations: GiftReservation[]) => void) {
+  if (!isFirebaseConfigured) {
+    try {
+      const raw = localStorage.getItem('alyne_reservations_cache_v1');
+      callback(raw ? JSON.parse(raw) : []);
+    } catch {
+      callback([]);
+    }
+    return () => {};
+  }
+
   const ref = collection(db, RESERVATIONS_COLLECTION);
   const q = query(ref, orderBy('createdAt', 'desc'));
 
