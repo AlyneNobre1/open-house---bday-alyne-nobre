@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { X, Copy, Check, Heart, ExternalLink, QrCode, AlertCircle, ShoppingBag } from 'lucide-react';
+import QRCode from 'qrcode';
+import { X, Copy, Check, Heart, ExternalLink, QrCode as PixIcon, AlertCircle, ShoppingBag } from 'lucide-react';
 import { Gift } from '../types';
 import { reserveGiftWithTransaction } from '../services/giftService';
+import { buildPixPayload } from '../utils/pix';
 
 interface GiftReserveModalProps {
   gift: Gift | null;
@@ -15,8 +17,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  if (!gift) return null;
-
   const [guestName, setGuestName] = useState('');
   const [guestWhatsapp, setGuestWhatsapp] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -25,16 +25,47 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
   const [error, setError] = useState('');
   const [isReservedSuccess, setIsReservedSuccess] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+
+  if (!gift) return null;
 
   const isSoldOut = gift.availableQuantity <= 0;
   const maxAvailable = Math.max(1, gift.availableQuantity);
+  const activePixKey = (gift.pixKey || '').trim() || 'alyne2.nobre.c@gmail.com';
 
-  const activePixKey = gift.pixKey || 'alyne2.nobre.c@gmail.com';
+  useEffect(() => {
+    if (!activePixKey) {
+      setQrCodeDataUrl('');
+      return;
+    }
 
-  const handleCopyPix = () => {
-    navigator.clipboard.writeText(activePixKey);
-    setPixCopied(true);
-    setTimeout(() => setPixCopied(false), 3000);
+    const payload = buildPixPayload({
+      pixKey: activePixKey,
+      amount: gift.price * quantity,
+      description: `${gift.name} - Presente de ${guestName || 'convidado'}`.slice(0, 40),
+      merchantName: 'Alyne Nobre',
+      merchantCity: 'SAO PAULO',
+      txId: `OPENHOUSE-${gift.id}`.slice(0, 25),
+    });
+
+    QRCode.toDataURL(payload, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 260,
+      type: 'image/png',
+    })
+      .then((dataUrl) => setQrCodeDataUrl(dataUrl))
+      .catch(() => setQrCodeDataUrl(''));
+  }, [activePixKey, gift.id, gift.name, gift.price, guestName, quantity]);
+
+  const handleCopyPix = async () => {
+    try {
+      await navigator.clipboard.writeText(activePixKey);
+      setPixCopied(true);
+      window.setTimeout(() => setPixCopied(false), 3000);
+    } catch {
+      setError('Não foi possível copiar a chave Pix. Copie manualmente abaixo.');
+    }
   };
 
   const handleConfirmReservation = async (e: React.FormEvent) => {
@@ -49,6 +80,10 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
       setError('Por favor, informe seu WhatsApp.');
       return;
     }
+    if (quantity < 1 || quantity > maxAvailable) {
+      setError(`Escolha entre 1 e ${maxAvailable} cota${maxAvailable > 1 ? 's' : ''}.`);
+      return;
+    }
     if (quantity > gift.availableQuantity) {
       setError(`Restam apenas ${gift.availableQuantity} cotas disponíveis.`);
       return;
@@ -58,10 +93,10 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
     try {
       await reserveGiftWithTransaction({
         giftId: gift.id,
-        guestName,
-        guestWhatsapp,
+        guestName: guestName.trim(),
+        guestWhatsapp: guestWhatsapp.trim(),
         quantity,
-        message,
+        message: message.trim(),
       });
 
       confetti({
@@ -74,25 +109,20 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
       setIsReservedSuccess(true);
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Não foi possível reservar este presente.');
+      setError(err?.message || 'Não foi possível reservar este presente.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate QR code URL if not custom uploaded
-  const qrCodeUrl =
-    gift.pixQrCodeUrl ||
-    `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-      activePixKey
-    )}`;
+  const qrCodeUrl = qrCodeDataUrl || (gift.pixQrCodeUrl ? gift.pixQrCodeUrl : '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div className="relative w-full max-w-lg bg-[#FAF8F5] border border-[#EADBCE] rounded-3xl p-6 sm:p-8 shadow-2xl my-8">
-        
-        {/* Close Button */}
         <button
+          type="button"
+          aria-label="Fechar"
           onClick={onClose}
           className="absolute top-5 right-5 h-9 w-9 rounded-full bg-[#F4EFEB] text-[#68625B] hover:text-[#2D2A26] hover:bg-[#EADBCE] flex items-center justify-center transition-colors cursor-pointer"
         >
@@ -100,7 +130,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
         </button>
 
         {isReservedSuccess ? (
-          /* Success Screen */
           <div className="text-center py-4">
             <div className="w-16 h-16 rounded-full bg-[#FBF0EB] text-[#C86D51] flex items-center justify-center mx-auto mb-4">
               <Heart className="w-8 h-8 fill-[#C86D51]" />
@@ -113,7 +142,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
               Seu carinho com o presente <strong>“{gift.name}”</strong> foi registrado com sucesso! A Alyne já vai ficar sabendo.
             </p>
 
-            {/* Next steps depending on gift type */}
             {(gift.type === 'pix' || gift.type === 'shares' || gift.pixKey) && (
               <div className="bg-[#FFFFFF] border border-[#EADBCE] rounded-2xl p-5 mb-6 text-left">
                 <div className="text-xs font-semibold uppercase tracking-wider text-[#A95339] mb-2">
@@ -123,9 +151,10 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   Como é um presente em cota/Pix, você pode fazer a transferência quando quiser:
                 </p>
 
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#FAF8F5] border border-[#F0E6DE] text-xs font-mono text-[#2D2A26] mb-3">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-[#FAF8F5] border border-[#F0E6DE] text-xs font-mono text-[#2D2A26] mb-3 gap-2">
                   <span className="truncate">{activePixKey}</span>
                   <button
+                    type="button"
                     onClick={handleCopyPix}
                     className="ml-2 px-3 py-1.5 rounded-lg bg-[#C86D51] hover:bg-[#A95339] text-white text-xs font-sans font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
@@ -149,14 +178,15 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   </p>
                 )}
 
-                {/* QR Code preview */}
                 <div className="text-center pt-2">
                   <div className="inline-block p-2 bg-white rounded-xl border border-[#EADBCE] shadow-xs">
-                    <img
-                      src={qrCodeUrl}
-                      alt="QR Code Pix"
-                      className="w-40 h-40 object-contain mx-auto"
-                    />
+                    {qrCodeUrl ? (
+                      <img src={qrCodeUrl} alt="QR Code Pix" className="w-40 h-40 object-contain mx-auto" />
+                    ) : (
+                      <div className="w-40 h-40 flex items-center justify-center text-[#A95339]">
+                        <PixIcon className="w-10 h-10" />
+                      </div>
+                    )}
                   </div>
                   <p className="text-[11px] text-[#7D756C] mt-2">
                     Abra o app do seu banco e escaneie o código
@@ -186,6 +216,7 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
             )}
 
             <button
+              type="button"
               onClick={onClose}
               className="w-full h-11 rounded-xl bg-[#C86D51] hover:bg-[#A95339] text-white text-xs font-semibold tracking-wide transition-colors cursor-pointer"
             >
@@ -193,9 +224,7 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
             </button>
           </div>
         ) : (
-          /* Reservation Form */
           <div>
-            {/* Header Gift Info */}
             <div className="flex gap-4 items-start mb-6">
               {gift.imageUrl ? (
                 <img
@@ -235,6 +264,7 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   🎉 Esse presente já está garantido! Todas as cotas foram reservadas por amigos incríveis.
                 </div>
                 <button
+                  type="button"
                   onClick={onClose}
                   className="px-6 py-2.5 rounded-xl border border-[#EADBCE] text-xs font-semibold text-[#68625B] hover:text-[#2D2A26]"
                 >
@@ -243,8 +273,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
               </div>
             ) : (
               <form onSubmit={handleConfirmReservation} className="space-y-4">
-                
-                {/* Cotas Selector (if totalQuantity > 1) */}
                 {gift.totalQuantity > 1 && (
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-[#68625B] mb-2">
@@ -264,7 +292,7 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                         </span>
                         <button
                           type="button"
-                          onClick={() => setQuantity(Math.min(gift.availableQuantity, quantity + 1))}
+                          onClick={() => setQuantity(Math.min(maxAvailable, quantity + 1))}
                           className="h-11 w-11 flex items-center justify-center text-lg font-bold text-[#68625B] hover:bg-[#FAF8F5] transition-colors cursor-pointer"
                         >
                           +
@@ -280,7 +308,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   </div>
                 )}
 
-                {/* Nome */}
                 <div>
                   <label htmlFor="reserve-name" className="block text-xs font-semibold uppercase tracking-wider text-[#68625B] mb-1.5">
                     Seu Nome *
@@ -296,7 +323,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   />
                 </div>
 
-                {/* WhatsApp */}
                 <div>
                   <label htmlFor="reserve-whatsapp" className="block text-xs font-semibold uppercase tracking-wider text-[#68625B] mb-1.5">
                     Seu WhatsApp *
@@ -312,7 +338,6 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                   />
                 </div>
 
-                {/* Mensagem Opcional */}
                 <div>
                   <label htmlFor="reserve-message" className="block text-xs font-semibold uppercase tracking-wider text-[#68625B] mb-1.5">
                     Recadinho carinhoso (opcional)
@@ -353,12 +378,10 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
                     Não cobramos nada no site! É apenas um compromisso carinhoso para a Alyne saber quem vai dar o quê.
                   </p>
                 </div>
-
               </form>
             )}
           </div>
         )}
-
       </div>
     </div>
   );

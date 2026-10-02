@@ -12,56 +12,10 @@ import { db } from '../lib/firebase';
 import { Guest, GuestStatus } from '../types';
 
 const GUESTS_COLLECTION = 'guests';
-const LOCAL_STORAGE_GUESTS_KEY = 'alyne_guests_cache_v1';
 
-function getLocalGuests(): Guest[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_GUESTS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn('LocalStorage error:', e);
-  }
-  // Realistic initial guests
-  return [
-    {
-      id: 'guest-1',
-      name: 'Amanda Silveira',
-      whatsapp: '(11) 98765-4321',
-      attendees: 2,
-      companions: ['Rodrigo Silveira'],
-      status: 'confirmed',
-      notes: 'Levaremos um vinho maravilhoso!',
-      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    },
-    {
-      id: 'guest-2',
-      name: 'Lucas Brandão',
-      whatsapp: '(11) 99123-5566',
-      attendees: 1,
-      companions: [],
-      status: 'confirmed',
-      notes: 'Não perco por nada!',
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    },
-    {
-      id: 'guest-3',
-      name: 'Mariana Duarte',
-      whatsapp: '(11) 97788-9900',
-      attendees: 2,
-      companions: ['Bruno Duarte'],
-      status: 'confirmed',
-      notes: 'Já ansiosa para conhecer o apê!',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    },
-  ];
-}
-
-function saveLocalGuests(guests: Guest[]) {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_GUESTS_KEY, JSON.stringify(guests));
-  } catch (e) {
-    console.warn('LocalStorage error:', e);
-  }
+function toSafeAttendees(value: unknown): number {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number : 0;
 }
 
 export function subscribeGuests(callback: (guests: Guest[]) => void) {
@@ -72,7 +26,7 @@ export function subscribeGuests(callback: (guests: Guest[]) => void) {
     q,
     (snapshot) => {
       if (snapshot.empty) {
-        callback(getLocalGuests());
+        callback([]);
         return;
       }
 
@@ -82,7 +36,7 @@ export function subscribeGuests(callback: (guests: Guest[]) => void) {
           id: docSnap.id,
           name: d.name || '',
           whatsapp: d.whatsapp || '',
-          attendees: Number(d.attendees || 1),
+          attendees: toSafeAttendees(d.attendees),
           companions: Array.isArray(d.companions) ? d.companions : [],
           status: (d.status as GuestStatus) || 'confirmed',
           notes: d.notes || '',
@@ -90,12 +44,10 @@ export function subscribeGuests(callback: (guests: Guest[]) => void) {
         };
       });
 
-      saveLocalGuests(list);
       callback(list);
     },
-    (err) => {
-      console.warn('Error subscribing to guests:', err);
-      callback(getLocalGuests());
+    () => {
+      callback([]);
     }
   );
 }
@@ -117,43 +69,35 @@ export async function registerRsvp(params: {
     throw new Error('Por favor, informe seu WhatsApp para combinarmos.');
   }
 
+  const request = addDoc(collection(db, GUESTS_COLLECTION), {
+    name: name.trim(),
+    whatsapp: whatsapp.trim(),
+    attendees: status === 'confirmed' ? Math.max(1, attendees) : 0,
+    companions: status === 'confirmed' ? companions.filter((c) => c.trim().length > 0) : [],
+    status,
+    notes: notes.trim(),
+    createdAt: serverTimestamp(),
+  });
+
   try {
-    const docRef = await addDoc(collection(db, GUESTS_COLLECTION), {
-      name: name.trim(),
-      whatsapp: whatsapp.trim(),
-      attendees: status === 'confirmed' ? Math.max(1, attendees) : 0,
-      companions: status === 'confirmed' ? companions.filter(c => c.trim().length > 0) : [],
-      status,
-      notes: notes.trim(),
-      createdAt: serverTimestamp(),
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Sem conexão. Tente novamente em alguns segundos.')), 10000);
     });
 
+    const docRef = await Promise.race([request, timeout]);
     return docRef.id;
   } catch (error) {
-    console.warn('Saving RSVP to local cache due to connection:', error);
-    const local = getLocalGuests();
-    const newGuest: Guest = {
-      id: `local-guest-${Date.now()}`,
-      name: name.trim(),
-      whatsapp: whatsapp.trim(),
-      attendees: status === 'confirmed' ? Math.max(1, attendees) : 0,
-      companions: status === 'confirmed' ? companions.filter(c => c.trim().length > 0) : [],
-      status,
-      notes: notes.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    local.unshift(newGuest);
-    saveLocalGuests(local);
-    return newGuest.id;
+    const message = error instanceof Error ? error.message : 'Erro inesperado ao registrar confirmação.';
+    if (message.includes('permission') || message.includes('permissão')) {
+      throw new Error('Permissão negada ao registrar a confirmação.');
+    }
+    if (message.includes('network') || message.includes('offline') || message.includes('Sem conexão')) {
+      throw new Error('Sem conexão. Tente novamente em alguns segundos.');
+    }
+    throw new Error(message || 'Erro inesperado ao registrar confirmação.');
   }
 }
 
 export async function deleteGuest(id: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, GUESTS_COLLECTION, id));
-  } catch (err) {
-    console.warn('Error deleting guest in firestore:', err);
-  }
-  const local = getLocalGuests().filter(g => g.id !== id);
-  saveLocalGuests(local);
+  await deleteDoc(doc(db, GUESTS_COLLECTION, id));
 }

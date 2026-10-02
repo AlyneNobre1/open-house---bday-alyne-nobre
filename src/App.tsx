@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { EventStory } from './components/EventStory';
@@ -10,13 +11,15 @@ import { LocationDetails } from './components/LocationDetails';
 import { ShareBar } from './components/ShareBar';
 import { Footer } from './components/Footer';
 import { AdminLoginModal } from './components/Admin/AdminLoginModal';
-import { AdminDashboard } from './components/Admin/AdminDashboard';
 import { Gift, Guest, GiftReservation, EventSettings } from './types';
 import { DEFAULT_SETTINGS, INITIAL_GIFTS } from './data/defaultData';
 import { subscribeSettings } from './services/settingsService';
 import { subscribeGifts } from './services/giftService';
 import { subscribeGuests } from './services/guestService';
 import { subscribeReservations } from './services/giftService';
+import { auth } from './lib/firebase';
+
+const AdminDashboard = lazy(() => import('./components/Admin/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
 
 export default function App() {
   const [settings, setSettings] = useState<EventSettings>(DEFAULT_SETTINGS);
@@ -32,10 +35,19 @@ export default function App() {
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
-  // Check admin session on load
   useEffect(() => {
-    const isLogged = localStorage.getItem('alyne_admin_logged_in') === 'true';
-    setIsAdminLoggedIn(isLogged);
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase();
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const isLogged = Boolean(user && adminEmail && user.email?.trim().toLowerCase() === adminEmail);
+      setIsAdminLoggedIn(isLogged);
+
+      if (!isLogged) {
+        setIsAdminDashboardOpen(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Listeners
@@ -48,13 +60,20 @@ export default function App() {
       setGifts(newGifts);
     });
 
-    const unsubGuests = subscribeGuests((newGuests) => {
-      setGuests(newGuests);
-    });
+    let unsubGuests = () => {};
+    let unsubReservations = () => {};
 
-    const unsubReservations = subscribeReservations((newReservations) => {
-      setReservations(newReservations);
-    });
+    if (isAdminLoggedIn) {
+      unsubGuests = subscribeGuests((newGuests) => {
+        setGuests(newGuests);
+      });
+      unsubReservations = subscribeReservations((newReservations) => {
+        setReservations(newReservations);
+      });
+    } else {
+      setGuests([]);
+      setReservations([]);
+    }
 
     return () => {
       unsubSettings();
@@ -62,7 +81,7 @@ export default function App() {
       unsubGuests();
       unsubReservations();
     };
-  }, []);
+  }, [isAdminLoggedIn]);
 
   const handleScrollTo = (id: string) => {
     const element = document.getElementById(id);
@@ -80,13 +99,11 @@ export default function App() {
   };
 
   const handleLoginSuccess = () => {
-    setIsAdminLoggedIn(true);
     setIsAdminDashboardOpen(true);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('alyne_admin_logged_in');
-    setIsAdminLoggedIn(false);
+  const handleLogout = async () => {
+    await signOut(auth);
     setIsAdminDashboardOpen(false);
   };
 
@@ -146,14 +163,16 @@ export default function App() {
 
       {/* Admin Full Dashboard */}
       {isAdminDashboardOpen && (
-        <AdminDashboard
-          gifts={gifts}
-          guests={guests}
-          reservations={reservations}
-          settings={settings}
-          onClose={() => setIsAdminDashboardOpen(false)}
-          onLogout={handleLogout}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/30" /> }>
+          <AdminDashboard
+            gifts={gifts}
+            guests={guests}
+            reservations={reservations}
+            settings={settings}
+            onClose={() => setIsAdminDashboardOpen(false)}
+            onLogout={handleLogout}
+          />
+        </Suspense>
       )}
     </div>
   );

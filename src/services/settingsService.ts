@@ -2,7 +2,6 @@ import {
   doc,
   onSnapshot,
   setDoc,
-  getDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -11,11 +10,10 @@ import { DEFAULT_SETTINGS } from '../data/defaultData';
 
 const SETTINGS_COLLECTION = 'eventSettings';
 const SETTINGS_DOC_ID = 'main';
-const LOCAL_STORAGE_SETTINGS_KEY = 'alyne_settings_cache_v1';
 
 function getLocalSettings(): EventSettings {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
+    const raw = localStorage.getItem('alyne_settings_cache_v1');
     if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch (e) {
     console.warn('LocalStorage settings error:', e);
@@ -25,7 +23,7 @@ function getLocalSettings(): EventSettings {
 
 function saveLocalSettings(settings: EventSettings) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+    localStorage.setItem('alyne_settings_cache_v1', JSON.stringify(settings));
   } catch (e) {
     console.warn('LocalStorage save error:', e);
   }
@@ -38,14 +36,13 @@ export function subscribeSettings(callback: (settings: EventSettings) => void) {
     ref,
     async (snapshot) => {
       if (!snapshot.exists()) {
-        // Initialize doc in Firestore
         try {
           await setDoc(ref, {
             ...DEFAULT_SETTINGS,
             updatedAt: serverTimestamp(),
           });
         } catch (err) {
-          console.warn('Could not write initial settings to Firestore, using fallback:', err);
+          console.warn('Could not write initial settings to Firestore:', err);
         }
         callback(getLocalSettings());
         return;
@@ -89,17 +86,9 @@ export function subscribeSettings(callback: (settings: EventSettings) => void) {
 }
 
 export async function updateEventSettings(newSettings: Partial<EventSettings>): Promise<void> {
-  const current = getLocalSettings();
-  const updated: EventSettings = { ...current, ...newSettings };
-  saveLocalSettings(updated);
-
-  try {
-    const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
-    await setDoc(ref, {
-      ...updated,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (err) {
-    console.warn('Error saving settings to firestore (saved locally):', err);
-  }
+  const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
+  await setDoc(ref, {
+    ...newSettings,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
