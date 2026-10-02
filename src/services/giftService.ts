@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { Gift, GiftReservation } from '../types';
-import { INITIAL_GIFTS } from '../data/defaultData';
+import { INITIAL_GIFTS, INITIAL_RESERVATIONS } from '../data/defaultData';
 
 const GIFTS_COLLECTION = 'gifts';
 const RESERVATIONS_COLLECTION = 'giftReservations';
@@ -22,8 +22,44 @@ const RESERVATIONS_COLLECTION = 'giftReservations';
 const LOCAL_CUSTOM_GIFTS_KEY = 'alyne_custom_gifts_v2';
 const LOCAL_GIFT_OVERRIDES_KEY = 'alyne_gift_overrides_v2';
 const LOCAL_DELETED_GIFTS_KEY = 'alyne_deleted_gifts_v2';
+const LOCAL_RESERVATIONS_KEY = 'alyne_reservations_cache_v2';
 
 let localGiftListeners: Array<(gifts: Gift[]) => void> = [];
+let localReservationListeners: Array<(reservations: GiftReservation[]) => void> = [];
+
+export function getLocalStoredReservations(): GiftReservation[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_RESERVATIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading local reservations:', e);
+  }
+
+  // Seed default reservations
+  const seeded = [...INITIAL_RESERVATIONS];
+  try {
+    localStorage.setItem(LOCAL_RESERVATIONS_KEY, JSON.stringify(seeded));
+  } catch {}
+  return seeded;
+}
+
+function saveLocalReservations(list: GiftReservation[]) {
+  try {
+    localStorage.setItem(LOCAL_RESERVATIONS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn('Error saving local reservations:', e);
+  }
+}
+
+function notifyReservationListeners() {
+  const list = getLocalStoredReservations();
+  localReservationListeners.forEach((fn) => fn(list));
+}
 
 function getLocalCustomGifts(): Gift[] {
   try {
@@ -57,14 +93,9 @@ function getLocalMergedGifts(): Gift[] {
   const overrides = getLocalGiftOverrides();
   const deleted = new Set(getLocalDeletedGifts());
 
-  let rawRes: GiftReservation[] = [];
-  try {
-    const r = localStorage.getItem('alyne_reservations_cache_v1');
-    if (r) rawRes = JSON.parse(r);
-  } catch {}
-
+  const reservations = getLocalStoredReservations();
   const reservedCounts: Record<string, number> = {};
-  for (const res of rawRes) {
+  for (const res of reservations) {
     reservedCounts[res.giftId] = (reservedCounts[res.giftId] || 0) + (res.quantity || 1);
   }
 
@@ -78,7 +109,10 @@ function getLocalMergedGifts(): Gift[] {
     .map((g) => {
       const override = overrides[g.id] || {};
       const merged = { ...g, ...override };
-      const reserved = reservedCounts[merged.id] || Number(merged.reservedQuantity || 0);
+      const reserved =
+        reservedCounts[merged.id] !== undefined
+          ? reservedCounts[merged.id]
+          : Number(merged.reservedQuantity || 0);
       const total = Number(merged.totalQuantity || 1);
       const available = Math.max(0, total - reserved);
       const status =
@@ -194,12 +228,13 @@ export async function seedGiftsToFirestore(): Promise<void> {
 
 export async function reserveGiftWithTransaction(params: {
   giftId: string;
+  giftName?: string;
   guestName: string;
   guestWhatsapp: string;
   quantity: number;
   message?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const { giftId, guestName, guestWhatsapp, quantity, message } = params;
+  const { giftId, giftName, guestName, guestWhatsapp, quantity, message } = params;
 
   if (quantity <= 0) {
     throw new Error('A quantidade precisa ser de pelo menos 1.');
@@ -208,14 +243,18 @@ export async function reserveGiftWithTransaction(params: {
     throw new Error('Por favor, informe seu nome para a Alyne saber quem é!');
   }
 
+  // Resolve gift name
+  const currentGifts = getLocalMergedGifts();
+  const foundGift = currentGifts.find((g) => g.id === giftId);
+  const resolvedGiftName = giftName?.trim() || foundGift?.name || 'Presente Especial';
+
   if (!isFirebaseConfigured) {
     try {
-      const rawRes = localStorage.getItem('alyne_reservations_cache_v1');
-      const reservations: GiftReservation[] = rawRes ? JSON.parse(rawRes) : [];
+      const reservations = getLocalStoredReservations();
       const newReservation: GiftReservation = {
         id: `local-res-${Date.now()}`,
         giftId,
-        giftName: '',
+        giftName: resolvedGiftName,
         guestName: guestName.trim(),
         guestWhatsapp: guestWhatsapp.trim(),
         quantity,
@@ -223,7 +262,9 @@ export async function reserveGiftWithTransaction(params: {
         createdAt: new Date().toISOString(),
       };
       reservations.unshift(newReservation);
-      localStorage.setItem('alyne_reservations_cache_v1', JSON.stringify(reservations));
+      saveLocalReservations(reservations);
+      notifyReservationListeners();
+      notifyGiftListeners();
     } catch (e) {
       console.warn('LocalStorage reservation save error:', e);
     }
@@ -266,7 +307,7 @@ export async function reserveGiftWithTransaction(params: {
       const reservationRef = doc(collection(db, RESERVATIONS_COLLECTION));
       transaction.set(reservationRef, {
         giftId,
-        giftName: data.name || '',
+        giftName: data.name || resolvedGiftName,
         guestName: guestName.trim(),
         guestWhatsapp: guestWhatsapp.trim(),
         quantity,
@@ -297,13 +338,11 @@ export async function reserveGiftWithTransaction(params: {
 
 export function subscribeReservations(callback: (reservations: GiftReservation[]) => void) {
   if (!isFirebaseConfigured) {
-    try {
-      const raw = localStorage.getItem('alyne_reservations_cache_v1');
-      callback(raw ? JSON.parse(raw) : []);
-    } catch {
-      callback([]);
-    }
-    return () => {};
+    localReservationListeners.push(callback);
+    callback(getLocalStoredReservations());
+    return () => {
+      localReservationListeners = localReservationListeners.filter((cb) => cb !== callback);
+    };
   }
 
   const ref = collection(db, RESERVATIONS_COLLECTION);

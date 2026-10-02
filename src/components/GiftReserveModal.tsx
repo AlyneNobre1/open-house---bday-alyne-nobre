@@ -93,6 +93,7 @@ export const GiftReserveModal: React.FC<GiftReserveModalProps> = ({
     try {
       await reserveGiftWithTransaction({
         giftId: gift.id,
+        giftName: gift.name,
         guestName: guestName.trim(),
         guestWhatsapp: guestWhatsapp.trim(),
         quantity,

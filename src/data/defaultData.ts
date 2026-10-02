@@ -1,4 +1,4 @@
-import { EventSettings, Gift } from '../types';
+import { EventSettings, Gift, Guest, GiftReservation } from '../types';
 import alynePortrait from '../assets/images/alyne_portrait_1790969104126.jpg';
 import modernLivingRoom from '../assets/images/modern_living_room_1790969114799.jpg';
 import kitchenDining from '../assets/images/kitchen_dining_bar_1790969125087.jpg';
@@ -184,3 +184,172 @@ export const INITIAL_GIFTS: Omit<Gift, 'id'>[] = [
     status: "available"
   }
 ];
+
+export const INITIAL_GUESTS: Omit<Guest, 'id'>[] = [
+  {
+    name: "Camila Santos",
+    whatsapp: "11998765432",
+    maxCompanions: 1,
+    attendees: 2,
+    companions: ["Felipe Ramos"],
+    status: "confirmed",
+    notes: "Super ansiosa para conhecer o apê novo! Levo um vinho 🍷",
+  },
+  {
+    name: "Lucas Ferreira",
+    whatsapp: "11987654321",
+    maxCompanions: 1,
+    attendees: 1,
+    companions: [],
+    status: "confirmed",
+    notes: "Conta comigo com certeza!",
+  },
+  {
+    name: "Mariana Silva",
+    whatsapp: "11976543210",
+    maxCompanions: 2,
+    attendees: 0,
+    companions: [],
+    status: "pending",
+  },
+  {
+    name: "Rodrigo Costa",
+    whatsapp: "11965432109",
+    maxCompanions: 1,
+    attendees: 0,
+    companions: [],
+    status: "pending",
+  },
+  {
+    name: "Beatriz Lima",
+    whatsapp: "11954321098",
+    maxCompanions: 0,
+    attendees: 0,
+    companions: [],
+    status: "pending",
+  },
+  {
+    name: "Rafael Alcantara",
+    whatsapp: "11943210987",
+    maxCompanions: 1,
+    attendees: 0,
+    companions: [],
+    status: "declined",
+    notes: "Vou estar viajando a trabalho, mas mandei presentinho! Parabéns Alyne! ❤️",
+  }
+];
+
+export const INITIAL_RESERVATIONS: GiftReservation[] = [
+  {
+    id: "res-seed-1",
+    giftId: "gift-seed-4",
+    giftName: "Air Fryer que salva vidas e jantares rápidos",
+    guestName: "Lucas Ferreira",
+    guestWhatsapp: "11987654321",
+    quantity: 1,
+    message: "Comprei no Magalu e mandei entregar direto! Parabéns pelo apê novo! 🥳",
+    createdAt: "2026-09-28T14:30:00.000Z",
+  },
+  {
+    id: "res-seed-2",
+    giftId: "gift-seed-1",
+    giftName: "Uma ajudinha para a 1ª parcela da geladeira 🥹",
+    guestName: "Camila Santos",
+    guestWhatsapp: "11998765432",
+    quantity: 2,
+    message: "Ajudando com a geladeira pra ter cerveja gelada sempre! 🍻",
+    createdAt: "2026-09-29T10:15:00.000Z",
+  },
+  {
+    id: "res-seed-3",
+    giftId: "gift-seed-1",
+    giftName: "Uma ajudinha para a 1ª parcela da geladeira 🥹",
+    guestName: "Rodrigo Costa",
+    guestWhatsapp: "11965432109",
+    quantity: 1,
+    message: "Parabéns Alyne! Muito sucesso na casa nova!",
+    createdAt: "2026-09-29T16:40:00.000Z",
+  },
+  {
+    id: "res-seed-4",
+    giftId: "gift-seed-2",
+    giftName: "Ajude a colocar um sofá nessa sala 😂",
+    guestName: "Mariana Silva",
+    guestWhatsapp: "11976543210",
+    quantity: 2,
+    message: "Já quero sentar nesse sofá novo pra maratonar série e bater papo!",
+    createdAt: "2026-09-30T11:20:00.000Z",
+  },
+  {
+    id: "res-seed-5",
+    giftId: "gift-seed-2",
+    giftName: "Ajude a colocar um sofá nessa sala 😂",
+    guestName: "Rafael Alcantara",
+    guestWhatsapp: "11943210987",
+    quantity: 1,
+    message: "Presentinho pro novo apê! Parabéns, Alyne! ❤️",
+    createdAt: "2026-09-30T18:05:00.000Z",
+  },
+  {
+    id: "res-seed-6",
+    giftId: "gift-seed-3",
+    giftName: "Cadeira para visitas ilustres",
+    guestName: "Felipe Ramos",
+    guestWhatsapp: "11998765432",
+    quantity: 2,
+    message: "Garantindo meu assento VIP na sala nova!",
+    createdAt: "2026-10-01T09:00:00.000Z",
+  },
+  {
+    id: "res-seed-7",
+    giftId: "gift-seed-5",
+    giftName: "Cafeteira Nespresso (para café de boas-vindas)",
+    guestName: "Beatriz Lima",
+    guestWhatsapp: "11954321098",
+    quantity: 1,
+    message: "Já quero aquele expresso cremoso na visita!",
+    createdAt: "2026-10-01T15:30:00.000Z",
+  },
+  {
+    id: "res-seed-8",
+    giftId: "gift-seed-6",
+    giftName: "Cota Livre: 'Gaste com o que você quiser!' 💚",
+    guestName: "Beatriz Lima",
+    guestWhatsapp: "11954321098",
+    quantity: 4,
+    message: "Usa como quiser, amiga! Muito feliz por essa nova fase!",
+    createdAt: "2026-10-01T19:10:00.000Z",
+  },
+  {
+    id: "res-seed-9",
+    giftId: "gift-seed-6",
+    giftName: "Cota Livre: 'Gaste com o que você quiser!' 💚",
+    guestName: "Camila Santos",
+    guestWhatsapp: "11998765432",
+    quantity: 4,
+    message: "Para ajudar com os parafusos e detalhes da casa!",
+    createdAt: "2026-10-02T08:45:00.000Z",
+  },
+  {
+    id: "res-seed-10",
+    giftId: "gift-seed-7",
+    giftName: "Barril de Chopp para o nosso Open House 🍻",
+    guestName: "Lucas Ferreira",
+    guestWhatsapp: "11987654321",
+    quantity: 2,
+    message: "Chopp garantido para comemorar em grande estilo!",
+    createdAt: "2026-10-02T12:00:00.000Z",
+  },
+  {
+    id: "res-seed-11",
+    giftId: "gift-seed-7",
+    giftName: "Barril de Chopp para o nosso Open House 🍻",
+    guestName: "Rodrigo Costa",
+    guestWhatsapp: "11965432109",
+    quantity: 2,
+    message: "Bora brindar muito ao apê novo!",
+    createdAt: "2026-10-02T13:30:00.000Z",
+  }
+];
+
+

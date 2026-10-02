@@ -66,18 +66,17 @@ export default function App() {
       setGifts(newGifts);
     });
 
-    let unsubGuests = () => {};
+    const unsubGuests = subscribeGuests((newGuests) => {
+      setGuests(newGuests);
+    });
+
     let unsubReservations = () => {};
 
     if (isAdminLoggedIn) {
-      unsubGuests = subscribeGuests((newGuests) => {
-        setGuests(newGuests);
-      });
       unsubReservations = subscribeReservations((newReservations) => {
         setReservations(newReservations);
       });
     } else {
-      setGuests([]);
       setReservations([]);
     }
 
