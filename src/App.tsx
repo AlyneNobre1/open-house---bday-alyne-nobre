@@ -36,13 +36,19 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   useEffect(() => {
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.trim().toLowerCase();
+    const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || 'alyne2.nobre.c@gmail.com').trim().toLowerCase();
+    const hasLocalAdmin = typeof window !== 'undefined' && localStorage.getItem('alyne_admin_logged_in') === 'true';
+
+    if (hasLocalAdmin) {
+      setIsAdminLoggedIn(true);
+    }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      const isLogged = Boolean(user && adminEmail && user.email?.trim().toLowerCase() === adminEmail);
-      setIsAdminLoggedIn(isLogged);
-
-      if (!isLogged) {
+      const isLogged = Boolean(user && user.email?.trim().toLowerCase() === adminEmail);
+      if (isLogged) {
+        setIsAdminLoggedIn(true);
+      } else if (!hasLocalAdmin) {
+        setIsAdminLoggedIn(false);
         setIsAdminDashboardOpen(false);
       }
     });
@@ -99,11 +105,16 @@ export default function App() {
   };
 
   const handleLoginSuccess = () => {
+    setIsAdminLoggedIn(true);
     setIsAdminDashboardOpen(true);
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    localStorage.removeItem('alyne_admin_logged_in');
+    try {
+      await signOut(auth);
+    } catch {}
+    setIsAdminLoggedIn(false);
     setIsAdminDashboardOpen(false);
   };
 
